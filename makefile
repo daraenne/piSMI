@@ -1,7 +1,9 @@
 # compiler
 CC 		= gcc
-LDFLAGS = -I inc -lbcm_host
+CFLAGS 	= -I inc
+LDFLAGS = -lbcm_host
 OPTI 	= -Ofast
+ARGS	= $(CFLAGS) $(LDFLAGS) $(OPTI)
 
 # dossiers et liste des fichiers
 SRC_DIR = src
@@ -15,19 +17,20 @@ OBJ 	= $(patsubst $(ASM_DIR)/%.s, $(OBJ_DIR)/%.o, $(ASM))
 EXEC 	= piSMI
 
 all: $(EXEC)
+	@echo "compilation succesful"
 
 $(EXEC): $(OBJ)
-	$(CC) -o $@ $^ $(LDFLAGS) $(OPTI)
+	$(CC) -o $@ $^ $(ARGS)
 
 $(OBJ_DIR)/%.o: $(ASM_DIR)/%.s
-	$(CC) -o $@ -c $^
+	$(CC) -C -o $@ -c $^ $(ARGS)
 
 $(ASM_DIR)/%.s: $(SRC_DIR)/%.c
-	$(CC) -S $@ -c $^ $(LDFLAGS) $(OPTI)
+	$(CC) -S -o $@ -c $^ $(ARGS)
 
 # CLEAR
 clear: clear_asm clear_obj
-	rm -f piSMI
+	rm -f $(EXEC)
 
 clear_obj:
 	rm -rf $(OBJ_DIR)/*

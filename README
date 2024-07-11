@@ -1,0 +1,21 @@
+# Utilisation du SMI (avec DMA ou non) sur RaspBerry pi
+
+## utilisation projet
+Pour compiler il faut ajouter ``` -lbcm_host ``` car je l'utilise pour détecter automatiquement l'addresse des périphériques <br>
+Pour utiliser la librairie il s'uffit d'utiliser les fonctions définis dans ``` inc/smi.h ``` <br>
+L'ors de l'utilisaton de ce code il faut peser a lancer l'executable avec sudo car j'utilise ``` /dev/mem ``` qui demande une ouverture en root <br>
+
+## Documention
+PDF dans ./doc/
+
+Liens utiles :
+- video :
+- - [CaribouLite Tutorial - 6. FPGA and SMI + Overview](https://www.youtube.com/watch?v=Zl8XpAlQSWI)
+- github :
+- - [jbentham/rpi (utilisation du smi avec du DMA)](https://github.com/jbentham/rpi/tree/master)
+- - [fenlogic/IDE_trial (creation d'un IDE avec du SMI)](https://github.com/fenlogic/IDE_trial/tree/master/sw)
+- blog :
+- - [Lean2 (utilisation du SMI pour faire fonctionner des ADC et DAC avec DMA)](https://iosoft.blog/2020/07/16/raspberry-pi-smi/)
+- - - [Lean2 (epxlication du DMA)](https://iosoft.blog/2020/05/25/raspberry-pi-dma-programming/)
+- - - [Lean2 (epxlication du DMA)](https://iosoft.blog/2020/06/11/fast-data-capture-raspberry-pi/)
+- [datasheet utiles (?) raspberry pi](https://datasheets.raspberrypi.com/)
