@@ -102,5 +102,6 @@ static void __exit Dexit(void){
 	device_destroy(devClass, devNr);
 	class_destroy(devClass);
 	unregister_chrdev(devNr, DRIVER_NAME);
+	gpio_freeAll();
 	printk("goodbye, kernel!\r\n");
 }
