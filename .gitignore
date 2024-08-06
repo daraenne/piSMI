@@ -1,0 +1,11 @@
+# racine
+*.cmd
+*.symvers
+*.order
+*.ko
+
+# dossier sources
+src/*.cmd
+src/*.mod*
+src/*.ko
+src/*.o
