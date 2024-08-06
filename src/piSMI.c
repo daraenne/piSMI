@@ -1,4 +1,4 @@
-#include "../inc/KpiSMI.h"
+#include "../inc/piSMI.h"
 
 static struct file_operations fops = {
 	.owner = THIS_MODULE,
@@ -13,6 +13,8 @@ static dev_t devNr;
 static struct class *devClass;
 static struct cdev devFile;
 
+uint8_t lastvalgpio;
+
 static ssize_t Dread(struct file *f, char *user_buffer, size_t count, loff_t *offs){
 	memcpy(user_buffer, "test de copie", 14);
 	return count;
@@ -23,6 +25,10 @@ static ssize_t Dwrite(struct file *f, const char *user_buffer, size_t count, lof
 	memset(tab, '\0', 1024);
 	memcpy(tab, user_buffer,(count > 1024)? 1023 : count);
 	printk("u wrote %s\r\n", tab);
+
+	lastvalgpio ^= 1;
+	gpio_setVal(21, lastvalgpio);
+
 	return (count > 1024)? 1023 : count;
 }
 
@@ -37,24 +43,24 @@ static int Dclose(struct inode *df, struct file *inst){
 }
 
 static int __init Dinit(void) {
-	printk("hello, kernel!\r\n");
+	printk(KERN_NOTICE "hello, kernel!\r\n");
 	
 	/* alloc dev nr */
 	if(alloc_chrdev_region(&devNr, 0, 1, DRIVER_NAME) < 0){
-		printk("fail allocate device nr");
+		printk(KERN_ERR "fail allocate device nr");
 		goto devNrError;
 	}
-	printk("read_write dev_nr : %d.%d\r\n", devNr >> 20, devNr & 0xfffff);
+	printk(KERN_INFO "read_write dev_nr : %d.%d\r\n", devNr >> 20, devNr & 0xfffff);
 
 	/* create dev class */
 	if((devClass = class_create(DRIVER_CLASS)) == NULL){
-		printk("fail to create class\r\n");
+		printk(KERN_ERR "fail to create class\r\n");
 		goto classError;
 	}
 
 	/* create dev file */
 	if(device_create(devClass, NULL, devNr, NULL, DRIVER_NAME) == NULL){
-		printk("fail to create file\r\n");
+		printk(KERN_ERR "fail to create file\r\n");
 		goto fileError;
 	}
 
@@ -63,12 +69,24 @@ static int __init Dinit(void) {
 
 	/* registering device to kernel */
 	if(cdev_add(&devFile, devNr, 1) == 1){
-		printk("fail to register dev file to kernel\r\n");
+		printk(KERN_ERR "fail to register dev file to kernel\r\n");
 		goto addError;
 	}
 
-	return 0;
+	if(gpio_init() < 0){
+		printk(KERN_ERR "probleme initialisation gpio regs\r\n");
+		goto gpioIniterror;
+	}
 
+	if(!gpio_config(21, OUT)){
+		printk(KERN_ERR "probleme configuration gpio 21");
+		goto gpioIniterror;
+	}
+	lastvalgpio = 0;
+
+	return 0;
+gpioIniterror :
+	gpio_freeAll();
 addError:
 	device_destroy(devClass, devNr);
 fileError:

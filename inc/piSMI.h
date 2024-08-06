@@ -1,10 +1,12 @@
-#ifndef KPISMI_H
-#define KPISMI_H
+#ifndef PISMI_H
+#define PISMI_H
 
 #include <linux/module.h>
-#include <linux/fs.h>
 #include <linux/init.h>
 #include <linux/cdev.h>
+#include <linux/fs.h>
+
+#include "../inc/gpio.h"
 
 /* Meta Information */
 MODULE_LICENSE("GPL");
@@ -23,4 +25,4 @@ static void __exit Dexit(void);
 module_init(Dinit);
 module_exit(Dexit);
 
-#endif
+#endif // !PISMI_H
