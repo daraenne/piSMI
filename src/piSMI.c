@@ -16,20 +16,20 @@ static struct cdev devFile;
 uint8_t lastvalgpio;
 
 static ssize_t Dread(struct file *f, char *user_buffer, size_t count, loff_t *offs){
-	memcpy(user_buffer, "test de copie", 14);
-	return count;
+	uint32_t delta = 0;
+	uint8_t tab[15] = "test de copie\n";
+	delta = count - copy_to_user(user_buffer, tab, 15);
+	
+	return delta;
 }
 
 static ssize_t Dwrite(struct file *f, const char *user_buffer, size_t count, loff_t *offs){
-	uint8_t tab[1024];
-	memset(tab, '\0', 1024);
-	memcpy(tab, user_buffer,(count > 1024)? 1023 : count);
-	printk("u wrote %s\r\n", tab);
+	uint16_t tab[1024];
+	memset(tab, '\0', sizeof(tab));
+	for(uint32_t i=0; i<((count >= 1024)? 1023 : count); i++) tab[i] = user_buffer[i];
 
-	lastvalgpio ^= 1;
-	gpio_setVal(21, lastvalgpio);
-
-	return (count > 1024)? 1023 : count;
+	smi_block_write(0,((count >= 1024)? 1023 : count), tab, 2, 5000);
+	return (count >= 1024)? 1023 : count;
 }
 
 static int Dopen(struct inode *df, struct file *inst){
@@ -73,18 +73,24 @@ static int __init Dinit(void) {
 		goto addError;
 	}
 
-	if(gpio_init() < 0){
+	if(!gpio_init()){
 		printk(KERN_ERR "probleme initialisation gpio regs\r\n");
 		goto gpioIniterror;
 	}
 
-	if(!gpio_config(21, OUT)){
-		printk(KERN_ERR "probleme configuration gpio 21");
-		goto gpioIniterror;
+	if(!smi_init()){
+		printk(KERN_ERR "probleme initialisation smi\r\n");
+		goto smiInitError;
 	}
-	lastvalgpio = 0;
+	if(!smi_setup()){
+		printk(KERN_ERR "probleme setup du smi\r\n");
+		goto smiInitError;
+	}
 
+	struct *file vcioF = filp_open("/dev/vcio", 0);
 	return 0;
+smiInitError :
+	smi_freeAll();
 gpioIniterror :
 	gpio_freeAll();
 addError:
@@ -103,5 +109,6 @@ static void __exit Dexit(void){
 	class_destroy(devClass);
 	unregister_chrdev(devNr, DRIVER_NAME);
 	gpio_freeAll();
-	printk("goodbye, kernel!\r\n");
+	smi_freeAll();
+	printk(KERN_NOTICE "goodbye, kernel!\r\n");
 }

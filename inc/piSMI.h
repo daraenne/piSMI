@@ -7,6 +7,7 @@
 #include <linux/fs.h>
 
 #include "../inc/gpio.h"
+#include "../inc/smi.h"
 
 /* Meta Information */
 MODULE_LICENSE("GPL");
