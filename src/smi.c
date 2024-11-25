@@ -13,19 +13,21 @@
 // 
 // Main access pointer to SMI peripheral
 //
-extern volatile uint32_t 		*virt_gpio_regs;
-volatile uint32_t 				*virt_clk_regs;
-volatile uint32_t 				*virt_smi_regs;
-static volatile SMI_CS_REG_T  	*smi_cs;
-static volatile SMI_L_REG_T   	*smi_l;
-static volatile SMI_A_REG_T   	*smi_a;
-static volatile SMI_D_REG_T   	*smi_d;
-static volatile SMI_DC_REG_T 	*smi_dc;
-static volatile SMI_DSR_REG_T 	*smi_dsr[4];
-static volatile SMI_DSW_REG_T 	*smi_dsw[4];
-static volatile SMI_DCS_REG_T 	*smi_dcs;
-static volatile SMI_DA_REG_T 	*smi_da;
-static volatile SMI_DD_REG_T 	*smi_dd;
+extern volatile DMAMemHandle_t* readBuff;
+extern volatile DMAMemHandle_t* writeBuff;
+extern volatile uint32_t*		virt_gpio_regs;
+volatile uint32_t*				virt_clk_regs;
+volatile uint32_t*				virt_smi_regs;
+static volatile SMI_CS_REG_T*	smi_cs;
+static volatile SMI_L_REG_T*	smi_l;
+static volatile SMI_A_REG_T*	smi_a;
+static volatile SMI_D_REG_T*	smi_d;
+static volatile SMI_DC_REG_T*	smi_dc;
+static volatile SMI_DSR_REG_T*	smi_dsr[4];
+static volatile SMI_DSW_REG_T*	smi_dsw[4];
+static volatile SMI_DCS_REG_T*	smi_dcs;
+static volatile SMI_DA_REG_T*	smi_da;
+static volatile SMI_DD_REG_T*	smi_dd;
 
 uint8_t init_smi_clk(void){
 	volatile uint32_t periph_addr = bcm_host_get_peripheral_address();
@@ -178,7 +180,7 @@ uint8_t smi_direct_read(uint8_t timing, uint32_t* data, uint32_t address, uint32
 	if(smi_dcs->done) smi_dcs->done = 1;
 	
 	// Start read transfer 
-	smi_da->dev = timing& 0b11;
+	smi_da->dev = timing & 0b11;
 	smi_da->addr = address;
 	smi_dcs->write = 0;
 	smi_dcs->enable = 1;
@@ -249,6 +251,24 @@ uint8_t smi_block_write(uint8_t timing, uint32_t words, uint16_t *data, uint8_t 
 	return 1;
 }
 
+void* smi_dma_write(uint8_t timing, uint32_t words, uint16_t *data, uint8_t address, uint8_t loop){
+	smi_a->dev = timing & 0b11;
+	smi_a->addr = address;
+
+	smi_l->len = words;
+	
+	// smi_cs->pxldat = 1;
+	smi_dc->dmaen = 1;
+	smi_cs->write = 1;
+	smi_cs->enable = 1;
+	smi_cs->clear = 1;
+	
+	// memcpy(writeBuff->virtual_addr, data, words);
+	printf("debug\r\n");
+	dma_setup_cb(writeBuff->bus_addr, (BUS_BASE + SMI_BASE + SMI_DATA_REG), words, 1, 1);
+	start_dma(1);
+	smi_cs->start = 1;
+}
 
 //
 // Perform block read
@@ -270,7 +290,7 @@ uint8_t smi_block_read(uint8_t timing, uint32_t words, uint16_t *data, uint8_t a
 	smi_l->len = words;
 		
 	// Start transfer
-	smi_cs->enable = 14;
+	smi_cs->enable = 1;
 	smi_cs->start = 1;
 	
 	while(words){ 
@@ -291,106 +311,3 @@ uint8_t smi_block_read(uint8_t timing, uint32_t words, uint16_t *data, uint8_t a
 	
 	return 1;
 }
-
-/*
-// *****************************************
-// Simple DMA Setup Routine
-// *****************************************
-
-
-void common_dma_setup  ( const uint32_t channel,                         // dma channel 0 to 15
-                        const uint32_t source_addr,                     // 30 bit source address
-                        const uint32_t dest_addr,                       // 30 bit destination address
-                        const uint32_t src_stride,                      // 2d source stride
-                        const uint32_t dst_stride,                      // 2d destination stride
-                        const uint32_t transfer_length,                 // length in bytes
-                        const uint32_t control_block_addr,              // address of 256 bit aligned block of memory 256 bits long to store control block in
-                        const uint32_t next_control_block_addr,         // address of the next control block to load (0 if you want the dma to stop)
-                        const uint32_t transfer_info                    // transfer info control reg
-                      )
-{
-
-   // write the control block
-   *((int*)control_block_addr + 0) = transfer_info;
-   *((int*)control_block_addr + 1) = source_addr;
-   *((int*)control_block_addr + 2) = dest_addr;
-   *((int*)control_block_addr + 3) = transfer_length;
-   *((int*)control_block_addr + 4) = ((dst_stride & 0xffff) << 16) | src_stride & 0xffff;
-   *((int*)control_block_addr + 5) = next_control_block_addr;
-
-   // channel 15 is in the VPU
-   if (channel == 15) {
-      DMA15_CS        = 0x0;
-      DMA15_CS        = (1<<DMA15_CS_INT_LSB) | (1<<DMA15_CS_END_LSB);
-      DMA15_CONBLK_AD = (int)control_block_addr;
-   } else {
-      DMA_CS(channel)        = 0x0 ;                                        // make sure dma is stopped
-      DMA_CS(channel)        = (1<<DMA_0_CS_INT_LSB) | (1<<DMA_0_CS_END_LSB); // clear interrupts and end flag by writing a 1 to them
-      DMA_CONBLK_AD(channel) = (int)control_block_addr;                     // give the dma the control block
-   }
-
-
-   // it wont start until we set the active bit
-
-}
-
-
-// *****************************************
-// start the dma channel
-// *****************************************
-void common_dma_start ( const uint32_t channel ) {
-
-   if (channel == 15) {
-      DMA15_CS |= (1<<DMA15_CS_ACTIVE_LSB);
-   } else {
-      DMA_CS(channel) |= (1<<DMA_8_CS_ACTIVE_LSB);
-   }
-
-}
-
-*/
-
-/*
-// Find out what revision board the Raspberry Pi is
-// Using the file '/proc/cpuinfo' for that.
-// returns 
-//  0 : could not tell 
-//  1 : rev 1
-//  2 : rev 2
-//  3 : B+
-//
-int pi_revision()
-{
-   FILE *fp;
-   int  revision, match, number;
-   char text[128]; // holds one line of file
-
-   revision = 0;
-   // Open the file with the CPU info
-   fp = fopen("/proc/cpuinfo","r");
-   if (fp)
-   { // Find the line which starts 'Revision'
-     while (fgets(text, 128, fp)) // get one line of text from file
-     {
-       if (!strncmp(text,"Revision",8)) // strncmp returns 0 if string matches
-       { // Get the revision number from the text
-      	 match = sscanf(text,"%*s : %0X",&number); // rev num is after the :
-      	 if (match == 1)
-      	   { // Yes, we have a revision number
-      	     if (number >= 10)
-      	       revision = 3;
-      	     else
-      	     if (number >= 4)
-      	       revision = 2;
-      	     else
-      	       revision = 1;
-      	   } // have number
-                break; // no use in reading more lines, so break out of the while
-       } // have revision text
-     } // get line from file
-     fclose(fp);
-   } // Have open file
-
-   return revision;
-} // pi_revision
- */

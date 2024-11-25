@@ -14,6 +14,7 @@ Liens utiles :
 - github :
 - - [jbentham/rpi (utilisation du smi avec du DMA)](https://github.com/jbentham/rpi/tree/master)
 - - [fenlogic/IDE_trial (creation d'un IDE avec du SMI)](https://github.com/fenlogic/IDE_trial/tree/master/sw)
+- - [fandaha017/Raspberry-Pi-DMA-Tutorial (tuto sur le dma dans une raspberryi pi)](https://github.com/fandahao17/Raspberry-Pi-DMA-Tutorial/tree/master)
 - blog :
 - - [Lean2 (utilisation du SMI pour faire fonctionner des ADC et DAC avec DMA)](https://iosoft.blog/2020/07/16/raspberry-pi-smi/)
 - - - [Lean2 (epxlication du DMA)](https://iosoft.blog/2020/05/25/raspberry-pi-dma-programming/)
