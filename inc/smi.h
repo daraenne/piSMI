@@ -3,12 +3,19 @@
 
 #include <linux/bits.h>
 #include "../inc/gpio.h"
+#include "../inc/dma.h"
+
+#define __DEBUG 0
 
 #define SMI_BASE        	0x600000
 #define SMI_DATA_REG		0x0C
 #define CLK_BASE        	0x101000
 #define SMI_REGS_SIZE		0x40
 #define SMICLK_REGS_BASE	0x08
+
+#define FIFO_SIZE			1024
+#define READ_BUFFSIZE		FIFO_SIZE
+#define WRITE_BUFFSIZE		FIFO_SIZE
 
 #define SMI_CS_FIELDS 	enable:1, done:1, active:1, start:1, clear:1, write:1, pad:2,\
     					teen:1, intd:1, intt:1, intr:1, pvmode:1, seterr:1, pxldat:1, edreq:1,\

@@ -1,7 +1,5 @@
 #include "../inc/smi.h"
 
-// volatile DMAMemHandle_t* 		readBuff;
-// volatile DMAMemHandle_t* 		writeBuff;
 static volatile uint32_t*		virt_clk_regs;
 static volatile uint32_t*		virt_smi_regs;
 static volatile SMI_CS_REG_T*	smi_cs;
@@ -14,7 +12,9 @@ static volatile SMI_DSW_REG_T*	smi_dsw[4];
 static volatile SMI_DCS_REG_T*	smi_dcs;
 static volatile SMI_DA_REG_T*	smi_da;
 static volatile SMI_DD_REG_T*	smi_dd;
-// static DMA_CB_t 				dma_cb_config;
+static volatile DMAMemHandle_t* readBuff;
+static DMAMemHandle_t* 			writeBuff;
+static DMA_CB_t 				dma_cb_config;
 
 uint8_t smi_init(void){
 	virt_smi_regs = (uint32_t*) ioremap(PERIPH_BASE + SMI_BASE, SMI_REGS_SIZE);
@@ -23,16 +23,16 @@ uint8_t smi_init(void){
 		return 0;
 	}
 	
-	// readBuff = dma_malloc(READ_CNT * sizeof(uint32_t));
-	// if(NULL == readBuff){
-	// 	printf("erreur lors du malloc pour readBuff\r\n");
-	// 	return 0;
-	// }
-	// writeBuff = dma_malloc(WRITE_CNT * sizeof(uint32_t));
-	// if(NULL == writeBuff){
-	// 	printf("erreur lors du malloc pour writeBuff\r\n");
-	// 	return 0;
-	// }
+	readBuff = dma_malloc(READ_BUFFSIZE * sizeof(uint32_t));
+	if(!readBuff){
+		printk(KERN_ERR "erreur lors du malloc pour readBuff\r\n");
+		return 0;
+	}
+	writeBuff = dma_malloc(WRITE_BUFFSIZE * sizeof(uint32_t));
+	if(!writeBuff){
+		printk(KERN_ERR "erreur lors du malloc pour writeBuff\r\n");
+		return 0;
+	}
 
 	smi_cs = (SMI_CS_REG_T*) &virt_smi_regs[0];
 	smi_l = (SMI_L_REG_T*) &virt_smi_regs[1];
@@ -53,21 +53,13 @@ uint8_t smi_init(void){
 		return 0;
 	}
 
-	// dma_cb_config.tx_info.no_wide_burst = 1;
-	// dma_cb_config.tx_info.wait_resp = 1;
-	// dma_cb_config.tx_info.dest_dreq = 1;
-	// dma_cb_config.tx_info.permap = 4;
+	dma_cb_config.tx_info.no_wide_burst = 1;
+	dma_cb_config.tx_info.wait_resp = 1;
+	dma_cb_config.tx_info.dest_dreq = 1;
+	dma_cb_config.tx_info.permap = 4;
 	return 1;
 }
 
-//
-// Set up basic SMI mode 
-// channel 0 is for 'PIO' mode
-// channel 1 is for 'DMA' mode 
-//
-// return 1 on OK
-// return 0 on failure 
-//
 uint8_t smi_setup(void){
 	volatile unsigned int* smi_clk;
 	
@@ -109,13 +101,11 @@ uint8_t smi_setup(void){
 
 	// Using SMI D16/D17 as DREQ/DACK pins
 	smi_dc->dmap = 1;
-			
+	smi_cs->pxldat = 1;
+
 	return 1;
 }
 
-//
-// Setup one of eight interface timings
-// 
 uint8_t smi_set_timing(uint8_t channel, uint8_t read, uint8_t setup, uint8_t strobe, uint8_t hold, uint8_t pace){
 	if(read){
 		smi_dsr[channel]->rsetup = setup;
@@ -131,9 +121,6 @@ uint8_t smi_set_timing(uint8_t channel, uint8_t read, uint8_t setup, uint8_t str
 	return 1;
 }
 
-//
-// Perform direct write
-// 
 uint8_t smi_direct_write(uint8_t timing, uint32_t data, uint32_t address, uint32_t time_out){
 	// clear done bit if set
 	if(smi_dcs->done) smi_dcs->done = 1;
@@ -156,9 +143,6 @@ uint8_t smi_direct_write(uint8_t timing, uint32_t data, uint32_t address, uint32
 	return 1;
 }
 
-// 
-// Perform direct read
-// 
 uint8_t smi_direct_read(uint8_t timing, uint32_t* data, uint32_t address, uint32_t time_out){
 	// clear done bit if set 
 	if(smi_dcs->done) smi_dcs->done = 1;
@@ -184,10 +168,6 @@ uint8_t smi_direct_read(uint8_t timing, uint32_t* data, uint32_t address, uint32
 	return 1;
 }
 
-
-//
-// Perform block write
-// 
 uint8_t smi_block_write(uint8_t timing, uint32_t words, uint16_t *data, uint8_t address, uint32_t time_out){
 	// debug: clear FIFO 
 	smi_cs->clear = 1;
@@ -235,46 +215,38 @@ uint8_t smi_block_write(uint8_t timing, uint32_t words, uint16_t *data, uint8_t 
 	return 1;
 }
 
-// uint8_t smi_dma_write(uint8_t timing, uint32_t bytes, uint16_t *data, uint8_t address, uint8_t loop, uint8_t treshold){
-// 	smi_cs->clear = 1;
-// 	smi_cs->enable = 1;
-// 	smi_cs->write = 1;
-// 	smi_l->len = bytes / sizeof(uint16_t);
-// 	smi_a->dev = timing & 0b11;
-// 	smi_a->addr = address;
-// 	smi_dc->dmaen = 1;
-// 	smi_dc->dmap = 1;
-// 	smi_dc->reqw = treshold;
-// 	smi_dsw[timing]->wdreq = 0;
+uint8_t smi_dma_write(uint8_t timing, uint32_t bytes, uint16_t *data, uint8_t address, uint8_t loop, uint8_t treshold){
+	smi_cs->clear = 1;
+	smi_cs->enable = 1;
+	smi_cs->write = 1;
+	smi_l->len = bytes;
+	smi_a->dev = timing & 0b11;
+	smi_a->addr = address;
+	smi_dc->dmaen = 1;
+	smi_dc->dmap = 1;
+	smi_dc->reqw = treshold;
+	smi_dsw[timing]->wdreq = 0;
 	
 
-// 	// for(uint32_t i=0; i<bytes/2; i++) ((uint16_t*)writeBuff->virtual_addr)[i] = data[i];
-// 	memcpy(writeBuff->virtual_addr, data, bytes);
-// 	dma_cb_config.tx_info.dest_inc = 0;
-// 	dma_cb_config.tx_info.src_inc = 1;
-// 	dma_cb_config.src_addr = writeBuff->bus_addr;
-// 	dma_cb_config.dst_addr = (uint32_t *) (BUS_BASE + SMI_BASE + SMI_DATA_REG);
-// 	dma_cb_config.tx_len = bytes;
-// 	dma_cb_config.next_cb = 0;
-// 	dma_setup_CB(1, dma_cb_config);
-// 	start_dma(1);
+	// for(uint32_t i=0; i<bytes/2; i++) ((uint16_t*)writeBuff->virtual_addr)[i] = data[i];
+	memcpy(writeBuff->virtual_addr, data, bytes);
+	dma_cb_config.tx_info.dest_inc = 0;
+	dma_cb_config.tx_info.src_inc = 1;
+	dma_cb_config.src_addr = writeBuff->bus_addr;
+	dma_cb_config.dst_addr = (uint32_t *) (BUS_BASE + SMI_BASE + SMI_DATA_REG);
+	dma_cb_config.tx_len = bytes;
+	dma_cb_config.next_cb = 0;
+	dma_setup_CB(1, dma_cb_config);
+	dma_start(1);
 
-// 	smi_cs->start = 1;
-// 	#if __DEBUG>=1
-// 		sleep(1);
-// 		disp_smi();
-// 	#endif
-// 	return 1;
-// }
+	smi_cs->start = 1;
+	#if __DEBUG >= 1
+		sleep(1);
+		disp_smi();
+	#endif
+	return 1;
+}
 
-//
-// Perform block read
-// When calling this the SMI immediately starts reading
-// Thus your device must have data available to read 
-// Or the smi channel must be set up to use DMA mode (DREQ/DACK)
-// This code need optimisation for the CPU to keep up at high speed.
-// Or needs a DMA channel assigned
-// 
 uint8_t smi_block_read(uint8_t timing, uint32_t words, uint16_t *data, uint8_t address, uint32_t time_out){
 	// clear done bit, enable for writes 
 	smi_cs->done = 1;
@@ -309,13 +281,12 @@ uint8_t smi_block_read(uint8_t timing, uint32_t words, uint16_t *data, uint8_t a
 }
 
 void smi_freeAll(void){
-	// dma_free(readBuff);
-	// dma_free(writeBuff);
+	dma_free(readBuff);
+	dma_free(writeBuff);
 	if(!virt_clk_regs) iounmap(virt_clk_regs);
 	if(!virt_smi_regs) iounmap(virt_smi_regs);
 }
 
-// Display DMA registers
 #define __print_smi(reg) do{if(reg) printk(KERN_DEBUG #reg " : %3d   ", reg);}while(0)
 void smi_disp(void){
     __print_smi(smi_cs->rxf);
